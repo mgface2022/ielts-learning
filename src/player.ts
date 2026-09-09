@@ -107,21 +107,7 @@ class LessonPlayer {
     }
   }
 
-  async toggle(id: string, assetPath: string, title?: string): Promise<void> {
-    await ensureAudioMode();
-
-    if (this.currentId === id && this.sound) {
-      if (this.playing) {
-        this.sound.pause();
-      } else {
-        if (this.duration > 0 && this.position >= this.duration - 200) {
-          await this.sound.seekTo(0);
-        }
-        this.sound.play();
-      }
-      return;
-    }
-
+  private start(id: string, assetPath: string, title?: string): AudioPlayer {
     this.release();
 
     const sound = createAudioPlayer({ uri: assetToUri(assetPath) }, { updateInterval: 100 });
@@ -142,6 +128,41 @@ class LessonPlayer {
       // 个别机型媒体会话注册失败时不影响正常播放
     }
     this.emit();
+    return sound;
+  }
+
+  async toggle(id: string, assetPath: string, title?: string): Promise<void> {
+    await ensureAudioMode();
+
+    if (this.currentId === id && this.sound) {
+      if (this.playing) {
+        this.sound.pause();
+      } else {
+        if (this.duration > 0 && this.position >= this.duration - 200) {
+          await this.sound.seekTo(0);
+        }
+        this.sound.play();
+      }
+      return;
+    }
+
+    this.start(id, assetPath, title);
+  }
+
+  /** 从指定毫秒位置开始播放（用于点句跳转） */
+  async playFrom(id: string, assetPath: string, ms: number, title?: string): Promise<void> {
+    await ensureAudioMode();
+
+    if (this.currentId === id && this.sound) {
+      await this.sound.seekTo(ms / 1000);
+      if (!this.playing) this.sound.play();
+      return;
+    }
+
+    const sound = this.start(id, assetPath, title);
+    if (ms > 0) {
+      await sound.seekTo(ms / 1000).catch(() => {});
+    }
   }
 
   async stop(): Promise<void> {

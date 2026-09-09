@@ -12,6 +12,14 @@ export type ChunkItem = {
   audio: string;
 };
 
+export type Sentence = {
+  text: string;
+  /** 句子在正文音频中的开始时间（毫秒） */
+  start: number;
+  /** 句子在正文音频中的结束时间（毫秒） */
+  end: number;
+};
+
 export type Article = {
   id: string;
   number: number;
@@ -19,6 +27,7 @@ export type Article = {
   body: string;
   translation: string;
   bodyAudio: string;
+  sentences?: Sentence[];
   vocab: VocabItem[];
   chunks: ChunkItem[];
 };

@@ -78,7 +78,34 @@ export function ArticleScreen({ article, learned, onBack, onToggleLearned }: Pro
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {tab === '听读' ? <Text style={styles.body}>{article.body}</Text> : null}
+        {tab === '听读' ? (
+          article.sentences && article.sentences.length > 0 ? (
+            <Text style={styles.body}>
+              {article.sentences.map((sentence, index) => {
+                const next = article.sentences![index + 1];
+                const active =
+                  isBody &&
+                  playback.position >= sentence.start &&
+                  (next ? playback.position < next.start : playback.position <= sentence.end + 500);
+                return (
+                  <Text
+                    key={index}
+                    suppressHighlighting
+                    style={active ? styles.sentenceOn : undefined}
+                    onPress={() => {
+                      void player.playFrom(bodyId, article.bodyAudio, sentence.start, article.title);
+                    }}
+                  >
+                    {sentence.text}
+                    {index < article.sentences!.length - 1 ? ' ' : ''}
+                  </Text>
+                );
+              })}
+            </Text>
+          ) : (
+            <Text style={styles.body}>{article.body}</Text>
+          )
+        ) : null}
         {tab === '词汇'
           ? article.vocab.map((item, index) => (
               <EntryRow
@@ -211,6 +238,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 32,
     fontFamily: 'serif',
+  },
+  sentenceOn: {
+    color: colors.second,
+    backgroundColor: 'rgba(216, 90, 26, 0.10)',
+    fontWeight: '700',
   },
   translation: {
     color: colors.ink,

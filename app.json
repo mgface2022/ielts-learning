@@ -1,8 +1,8 @@
 {
   "expo": {
     "name": "60s",
-    "slug": "sixtyseconds",
-    "version": "1.0.4",
+    "slug": "sixty seconds",
+    "version": "1.0.5",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
