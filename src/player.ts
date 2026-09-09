@@ -1,4 +1,4 @@
-import { Audio, AVPlaybackStatus } from 'expo-av';
+import { AudioPlayer, AudioStatus, createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 
 export function assetToUri(assetPath: string): string {
   const rel = assetPath.replace(/^assets\//, '');
@@ -15,8 +15,24 @@ export type PlayerSnapshot = {
   progress: number;
 };
 
+let audioModeReady = false;
+
+async function ensureAudioMode(): Promise<void> {
+  if (audioModeReady) return;
+  audioModeReady = true;
+  try {
+    await setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: false,
+    });
+  } catch {
+    // 音频模式设置失败不影响播放
+  }
+}
+
 class LessonPlayer {
-  sound: Audio.Sound | null = null;
+  private sound: AudioPlayer | null = null;
+  private statusSub: { remove: () => void } | null = null;
   currentId: string | null = null;
   playing = false;
   position = 0;
@@ -50,62 +66,62 @@ class LessonPlayer {
     return this.currentId === id;
   }
 
-  private onStatus = (status: AVPlaybackStatus) => {
-    if (!status.isLoaded) {
-      this.playing = false;
-      this.emit();
-      return;
-    }
-    this.playing = status.isPlaying;
-    this.position = status.positionMillis;
-    this.duration = status.durationMillis ?? 0;
+  private onStatus = (status: AudioStatus) => {
+    this.playing = status.playing;
+    // expo-audio 返回秒，UI 沿用毫秒
+    this.position = Math.round(status.currentTime * 1000);
+    this.duration = Math.round(status.duration * 1000);
     if (status.didJustFinish) {
       this.playing = false;
       this.position = 0;
+      this.sound?.pause();
+      this.sound?.seekTo(0).catch(() => {});
     }
     this.emit();
   };
 
+  private release() {
+    this.statusSub?.remove();
+    this.statusSub = null;
+    if (this.sound) {
+      try {
+        this.sound.remove();
+      } catch {
+        // 已释放则忽略
+      }
+      this.sound = null;
+    }
+  }
+
   async toggle(id: string, assetPath: string): Promise<void> {
-    await Audio.setAudioModeAsync({
-      playsInSilentModeIOS: true,
-      staysActiveInBackground: false,
-      shouldDuckAndroid: true,
-    });
+    await ensureAudioMode();
 
     if (this.currentId === id && this.sound) {
-      const status = await this.sound.getStatusAsync();
-      if (status.isLoaded && status.isPlaying) {
-        await this.sound.pauseAsync();
-      } else if (status.isLoaded) {
-        if (status.didJustFinish || status.positionMillis >= (status.durationMillis ?? 1) - 200) {
-          await this.sound.setPositionAsync(0);
+      if (this.playing) {
+        this.sound.pause();
+      } else {
+        if (this.duration > 0 && this.position >= this.duration - 200) {
+          await this.sound.seekTo(0);
         }
-        await this.sound.playAsync();
+        this.sound.play();
       }
       return;
     }
 
-    if (this.sound) {
-      await this.sound.unloadAsync();
-      this.sound = null;
-    }
+    this.release();
 
-    const { sound } = await Audio.Sound.createAsync(
-      { uri: assetToUri(assetPath) },
-      { shouldPlay: true, progressUpdateIntervalMillis: 80 },
-      this.onStatus,
-    );
+    const sound = createAudioPlayer({ uri: assetToUri(assetPath) }, { updateInterval: 100 });
+    this.statusSub = sound.addListener('playbackStatusUpdate', this.onStatus);
     this.sound = sound;
     this.currentId = id;
+    this.position = 0;
+    this.duration = 0;
+    sound.play();
     this.emit();
   }
 
   async stop(): Promise<void> {
-    if (this.sound) {
-      await this.sound.unloadAsync();
-      this.sound = null;
-    }
+    this.release();
     this.currentId = null;
     this.playing = false;
     this.position = 0;

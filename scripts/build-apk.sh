@@ -22,3 +22,13 @@ printf 'sdk.dir=%s\n' "$ANDROID_HOME" > "$ANDROID_DIR/local.properties"
 rm -rf "$ANDROID_DIR/app/.cxx" "$ANDROID_DIR/app/build/intermediates/cxx"
 cd "$ANDROID_DIR"
 ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
+
+APK_SRC="$ANDROID_DIR/app/build/outputs/apk/release/app-release.apk"
+APK_DST="$ROOT/60s-$(date +%Y%m%d%H%M%S).apk"
+if [ ! -f "$APK_SRC" ]; then
+  echo "APK not found: $APK_SRC"
+  exit 1
+fi
+cp -f "$APK_SRC" "$APK_DST"
+ls -lh "$APK_DST"
+echo "APK ready: $APK_DST"

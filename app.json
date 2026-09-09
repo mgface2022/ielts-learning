@@ -2,8 +2,8 @@
   "expo": {
     "name": "60s",
     "slug": "sixtyseconds",
-    "version": "1.0.0",
-    "orientation": "portrait",
+    "version": "1.0.3",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
@@ -17,6 +17,10 @@
     },
     "android": {
       "package": "app.sixtyseconds",
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#163027",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -26,7 +30,7 @@
       "predictiveBackGestureEnabled": false
     },
     "plugins": [
-      "expo-av"
+      "expo-audio"
     ]
   }
 }
