@@ -80,10 +80,16 @@ jobs:
 
   ios:
     name: iOS IPA (unsigned)
-    runs-on: macos-15
+    # Expo SDK 57 要求 Xcode 26.4+（Swift 6.3），macos-15 镜像的 Xcode 太老，
+    # 会在编译 ExpoModulesJSI 时报 "Could not resolve package dependencies"
+    runs-on: macos-26
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # 固定 Xcode 版本，避免镜像默认版本变动带来意外
+      - name: Select Xcode 26.4
+        run: sudo xcode-select -s /Applications/Xcode_26.4.app
 
       - name: Setup Node
         uses: actions/setup-node@v4
