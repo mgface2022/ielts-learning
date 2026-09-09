@@ -37,6 +37,13 @@ yarn-error.*
 *.tsbuildinfo
 
 # generated native folders
+# android/ 已提交进仓库（含手工改过的 Manifest/签名/折叠屏适配），CI 直接用它构建
+# ios/ 仍由 expo prebuild 在 CI 上生成
 /ios
-/android
 *.apk
+
+# 音频由 scripts/sync-android-audio.js 从 assets/audio 复制而来，不重复入库
+android/app/src/main/assets/audio/
+
+# 调试签名是公开的通用密钥，允许入库；正式签名密钥绝不入库
+!android/app/debug.keystore
