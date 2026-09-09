@@ -14,10 +14,12 @@ import type { Article } from '../types';
 type Props = {
   learned: Set<string>;
   lastId: string | null;
+  favoriteCount: number;
   onOpen: (article: Article) => void;
+  onOpenReview: () => void;
 };
 
-export function HomeScreen({ learned, lastId, onOpen }: Props) {
+export function HomeScreen({ learned, lastId, favoriteCount, onOpen, onOpenReview }: Props) {
   const articles = useMemo(() => loadArticles(), []);
   const [query, setQuery] = useState('');
   const filtered = useMemo(() => searchArticles(articles, query), [articles, query]);
@@ -42,14 +44,26 @@ export function HomeScreen({ learned, lastId, onOpen }: Props) {
             已学 {learnedCount} / {articles.length}
           </Text>
         </View>
-        {last ? (
-          <Pressable onPress={() => onOpen(last)} style={({ pressed }) => [styles.continue, pressed && styles.pressed]}>
-            <Text style={styles.continueKicker}>接着听</Text>
-            <Text style={styles.continueTitle}>
-              {numberLabel(last.number)}  {last.title}
-            </Text>
+        <View style={styles.cards}>
+          {last ? (
+            <Pressable
+              onPress={() => onOpen(last)}
+              style={({ pressed }) => [styles.continue, pressed && styles.pressed]}
+            >
+              <Text style={styles.continueKicker}>接着听</Text>
+              <Text style={styles.continueTitle} numberOfLines={1}>
+                {numberLabel(last.number)}  {last.title}
+              </Text>
+            </Pressable>
+          ) : null}
+          <Pressable
+            onPress={onOpenReview}
+            style={({ pressed }) => [styles.review, pressed && styles.pressed]}
+          >
+            <Text style={styles.reviewKicker}>复习</Text>
+            <Text style={styles.reviewTitle}>★ {favoriteCount}</Text>
           </Pressable>
-        ) : null}
+        </View>
         <TextInput
           value={query}
           onChangeText={setQuery}
@@ -124,11 +138,36 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontVariant: ['tabular-nums'],
   },
-  continue: {
+  cards: {
     marginTop: 14,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  continue: {
+    flex: 1,
     padding: 14,
     backgroundColor: colors.ink,
     borderRadius: 16,
+  },
+  review: {
+    minWidth: 96,
+    padding: 14,
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  reviewKicker: {
+    color: colors.mist,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+  },
+  reviewTitle: {
+    marginTop: 4,
+    color: colors.second,
+    fontSize: 17,
+    fontWeight: '800',
   },
   continueKicker: {
     color: colors.second,

@@ -34,4 +34,5 @@ export type Article = {
 
 export type Route =
   | { name: 'home' }
-  | { name: 'article'; id: string };
+  | { name: 'article'; id: string; highlight?: string; from?: 'home' | 'review' }
+  | { name: 'review' };

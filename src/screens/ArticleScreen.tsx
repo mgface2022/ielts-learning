@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { ReactNode, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -18,11 +18,46 @@ const TABS = ['听读', '词汇', '词块', '译文'] as const;
 type Props = {
   article: Article;
   learned: boolean;
+  favorites: Set<string>;
+  highlight?: string;
   onBack: () => void;
   onToggleLearned: () => void;
+  onToggleFavorite: (id: string) => void;
 };
 
-export function ArticleScreen({ article, learned, onBack, onToggleLearned }: Props) {
+/** 在句子文本里高亮命中的词/词块（大小写不敏感） */
+function markTerm(text: string, term: string | undefined, keyPrefix: string): ReactNode {
+  if (!term) return text;
+  const lower = text.toLowerCase();
+  const needle = term.toLowerCase();
+  let idx = lower.indexOf(needle);
+  if (idx < 0) return text;
+  const parts: ReactNode[] = [];
+  let pos = 0;
+  let seq = 0;
+  while (idx >= 0) {
+    if (idx > pos) parts.push(text.slice(pos, idx));
+    parts.push(
+      <Text key={`${keyPrefix}-${seq++}`} style={styles.mark}>
+        {text.slice(idx, idx + term.length)}
+      </Text>,
+    );
+    pos = idx + term.length;
+    idx = lower.indexOf(needle, pos);
+  }
+  parts.push(text.slice(pos));
+  return parts;
+}
+
+export function ArticleScreen({
+  article,
+  learned,
+  favorites,
+  highlight,
+  onBack,
+  onToggleLearned,
+  onToggleFavorite,
+}: Props) {
   const [tab, setTab] = useState<(typeof TABS)[number]>('听读');
   const playback = usePlayer();
   const bodyId = `body:${article.id}`;
@@ -96,43 +131,53 @@ export function ArticleScreen({ article, learned, onBack, onToggleLearned }: Pro
                       void player.playFrom(bodyId, article.bodyAudio, sentence.start, article.title);
                     }}
                   >
-                    {sentence.text}
+                    {markTerm(sentence.text, highlight, `s${index}`)}
                     {index < article.sentences!.length - 1 ? ' ' : ''}
                   </Text>
                 );
               })}
             </Text>
           ) : (
-            <Text style={styles.body}>{article.body}</Text>
+            <Text style={styles.body}>{markTerm(article.body, highlight, 'b')}</Text>
           )
         ) : null}
         {tab === '词汇'
-          ? article.vocab.map((item, index) => (
-              <EntryRow
-                key={`${item.en}-${index}`}
-                id={`vocab:${article.id}:${index}`}
-                audio={item.audio}
-                title={item.en}
-                subtitle={`${item.pos ?? ''}${item.lemma ? ` · ${item.lemma}` : ''}  ${item.zh}`.trim()}
-                currentId={playback.currentId}
-                playing={playback.playing}
-                progress={playback.progress}
-              />
-            ))
+          ? article.vocab.map((item, index) => {
+              const id = `vocab:${article.id}:${index}`;
+              return (
+                <EntryRow
+                  key={`${item.en}-${index}`}
+                  id={id}
+                  audio={item.audio}
+                  title={item.en}
+                  subtitle={`${item.pos ?? ''}${item.lemma ? ` · ${item.lemma}` : ''}  ${item.zh}`.trim()}
+                  currentId={playback.currentId}
+                  playing={playback.playing}
+                  progress={playback.progress}
+                  favorite={favorites.has(id)}
+                  onToggleFavorite={() => onToggleFavorite(id)}
+                />
+              );
+            })
           : null}
         {tab === '词块'
-          ? article.chunks.map((item, index) => (
-              <EntryRow
-                key={`${item.en}-${index}`}
-                id={`chunk:${article.id}:${index}`}
-                audio={item.audio}
-                title={item.en}
-                subtitle={item.zh}
-                currentId={playback.currentId}
-                playing={playback.playing}
-                progress={playback.progress}
-              />
-            ))
+          ? article.chunks.map((item, index) => {
+              const id = `chunk:${article.id}:${index}`;
+              return (
+                <EntryRow
+                  key={`${item.en}-${index}`}
+                  id={id}
+                  audio={item.audio}
+                  title={item.en}
+                  subtitle={item.zh}
+                  currentId={playback.currentId}
+                  playing={playback.playing}
+                  progress={playback.progress}
+                  favorite={favorites.has(id)}
+                  onToggleFavorite={() => onToggleFavorite(id)}
+                />
+              );
+            })
           : null}
         {tab === '译文' ? <Text style={styles.translation}>{article.translation}</Text> : null}
       </ScrollView>
@@ -148,6 +193,8 @@ function EntryRow({
   currentId,
   playing,
   progress,
+  favorite,
+  onToggleFavorite,
 }: {
   id: string;
   audio: string;
@@ -156,6 +203,8 @@ function EntryRow({
   currentId: string | null;
   playing: boolean;
   progress: number;
+  favorite: boolean;
+  onToggleFavorite: () => void;
 }) {
   const active = currentId === id;
   return (
@@ -172,6 +221,9 @@ function EntryRow({
         <Text style={styles.entryEn}>{title}</Text>
         <Text style={styles.entryZh}>{subtitle}</Text>
       </View>
+      <Pressable hitSlop={10} onPress={onToggleFavorite} style={styles.starBtn}>
+        <Text style={[styles.star, favorite && styles.starOn]}>{favorite ? '★' : '☆'}</Text>
+      </Pressable>
     </View>
   );
 }
@@ -244,6 +296,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(216, 90, 26, 0.10)',
     fontWeight: '700',
   },
+  mark: {
+    color: colors.second,
+    fontWeight: '800',
+    textDecorationLine: 'underline',
+  },
   translation: {
     color: colors.ink,
     fontSize: 17,
@@ -259,4 +316,7 @@ const styles = StyleSheet.create({
   },
   entryEn: { color: colors.ink, fontSize: 16, fontWeight: '700' },
   entryZh: { marginTop: 3, color: colors.mist, fontSize: 14, lineHeight: 20 },
+  starBtn: { minWidth: 40, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  star: { fontSize: 24, color: colors.line },
+  starOn: { color: colors.second },
 });

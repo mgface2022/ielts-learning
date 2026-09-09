@@ -9,27 +9,41 @@ import {
 } from 'react-native';
 import { ArticleScreen } from './src/screens/ArticleScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
+import { ReviewScreen } from './src/screens/ReviewScreen';
 import { findArticle } from './src/articles';
-import { loadLastId, loadLearned, saveLastId, saveLearned } from './src/storage';
+import {
+  loadFavorites,
+  loadLastId,
+  loadLearned,
+  saveFavorites,
+  saveLastId,
+  saveLearned,
+} from './src/storage';
 import { colors } from './src/theme';
 import type { Article, Route } from './src/types';
 
 export default function App() {
   const [route, setRoute] = useState<Route>({ name: 'home' });
   const [learned, setLearned] = useState<Set<string>>(new Set());
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [lastId, setLastId] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
       setLearned(await loadLearned());
+      setFavorites(await loadFavorites());
       setLastId(await loadLastId());
     })();
   }, []);
 
   useEffect(() => {
-    // 文章页按系统返回键回列表，而不是退出 App
+    // 文章页/复习页按系统返回键回上一级，而不是退出 App
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (route.name === 'article') {
+        setRoute(route.from === 'review' ? { name: 'review' } : { name: 'home' });
+        return true;
+      }
+      if (route.name === 'review') {
         setRoute({ name: 'home' });
         return true;
       }
@@ -39,7 +53,7 @@ export default function App() {
   }, [route]);
 
   const openArticle = (article: Article) => {
-    setRoute({ name: 'article', id: article.id });
+    setRoute({ name: 'article', id: article.id, from: 'home' });
     setLastId(article.id);
     void saveLastId(article.id);
   };
@@ -52,23 +66,53 @@ export default function App() {
     void saveLearned(next);
   };
 
+  const toggleFavorite = (id: string) => {
+    const next = new Set(favorites);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setFavorites(next);
+    void saveFavorites(next);
+  };
+
   const article = route.name === 'article' ? findArticle(route.id) : undefined;
 
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar style="dark" />
-      {article ? (
+      {route.name === 'review' ? (
+        <ReviewScreen
+          favorites={favorites}
+          onBack={() => setRoute({ name: 'home' })}
+          onToggleFavorite={toggleFavorite}
+          onOpenArticle={(articleId, highlight) => {
+            setRoute({ name: 'article', id: articleId, highlight, from: 'review' });
+          }}
+        />
+      ) : article ? (
         <ArticleScreen
           article={article}
           learned={learned.has(article.id)}
+          favorites={favorites}
+          highlight={route.name === 'article' ? route.highlight : undefined}
           onBack={() => {
-            // 返回列表不打断播放，音频继续在后台放，可从通知栏控制
-            setRoute({ name: 'home' });
+            // 返回不打断播放，音频继续在后台放，可从通知栏控制
+            setRoute(
+              route.name === 'article' && route.from === 'review'
+                ? { name: 'review' }
+                : { name: 'home' },
+            );
           }}
           onToggleLearned={() => toggleLearned(article.id)}
+          onToggleFavorite={toggleFavorite}
         />
       ) : (
-        <HomeScreen learned={learned} lastId={lastId} onOpen={openArticle} />
+        <HomeScreen
+          learned={learned}
+          lastId={lastId}
+          favoriteCount={favorites.size}
+          onOpen={openArticle}
+          onOpenReview={() => setRoute({ name: 'review' })}
+        />
       )}
     </SafeAreaView>
   );
