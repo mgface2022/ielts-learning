@@ -1,10 +1,15 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Platform, SafeAreaView, StatusBar as RNStatusBar, StyleSheet } from 'react-native';
+import {
+  BackHandler,
+  Platform,
+  SafeAreaView,
+  StatusBar as RNStatusBar,
+  StyleSheet,
+} from 'react-native';
 import { ArticleScreen } from './src/screens/ArticleScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { findArticle } from './src/articles';
-import { player } from './src/player';
 import { loadLastId, loadLearned, saveLastId, saveLearned } from './src/storage';
 import { colors } from './src/theme';
 import type { Article, Route } from './src/types';
@@ -20,6 +25,18 @@ export default function App() {
       setLastId(await loadLastId());
     })();
   }, []);
+
+  useEffect(() => {
+    // 文章页按系统返回键回列表，而不是退出 App
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (route.name === 'article') {
+        setRoute({ name: 'home' });
+        return true;
+      }
+      return false;
+    });
+    return () => sub.remove();
+  }, [route]);
 
   const openArticle = (article: Article) => {
     setRoute({ name: 'article', id: article.id });
@@ -45,7 +62,7 @@ export default function App() {
           article={article}
           learned={learned.has(article.id)}
           onBack={() => {
-            void player.stop();
+            // 返回列表不打断播放，音频继续在后台放，可从通知栏控制
             setRoute({ name: 'home' });
           }}
           onToggleLearned={() => toggleLearned(article.id)}

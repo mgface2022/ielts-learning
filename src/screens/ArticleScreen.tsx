@@ -49,7 +49,7 @@ export function ArticleScreen({ article, learned, onBack, onToggleLearned }: Pro
           playing={isBody && playback.playing}
           progress={isBody ? playback.progress : 0}
           onPress={() => {
-            void player.toggle(bodyId, article.bodyAudio);
+            void player.toggle(bodyId, article.bodyAudio, article.title);
           }}
         />
         <View style={{ flex: 1 }}>
@@ -138,7 +138,7 @@ function EntryRow({
         playing={active && playing}
         progress={active ? progress : 0}
         onPress={() => {
-          void player.toggle(id, audio);
+          void player.toggle(id, audio, title);
         }}
       />
       <View style={{ flex: 1 }}>

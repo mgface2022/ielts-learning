@@ -23,7 +23,9 @@ async function ensureAudioMode(): Promise<void> {
   try {
     await setAudioModeAsync({
       playsInSilentMode: true,
-      shouldPlayInBackground: false,
+      shouldPlayInBackground: true,
+      // 锁屏/通知栏媒体控制要求独占音频焦点，同时也保证别的 app 音乐会被暂停
+      interruptionMode: 'doNotMix',
     });
   } catch {
     // 音频模式设置失败不影响播放
@@ -84,6 +86,18 @@ class LessonPlayer {
     this.statusSub?.remove();
     this.statusSub = null;
     if (this.sound) {
+      // 必须先暂停再释放：只调 remove() 时底层 ExoPlayer 可能继续出声，
+      // 造成两段音频同时播放。
+      try {
+        this.sound.pause();
+      } catch {
+        // 已释放则忽略
+      }
+      try {
+        this.sound.clearLockScreenControls();
+      } catch {
+        // 未注册过锁屏控制则忽略
+      }
       try {
         this.sound.remove();
       } catch {
@@ -93,7 +107,7 @@ class LessonPlayer {
     }
   }
 
-  async toggle(id: string, assetPath: string): Promise<void> {
+  async toggle(id: string, assetPath: string, title?: string): Promise<void> {
     await ensureAudioMode();
 
     if (this.currentId === id && this.sound) {
@@ -117,6 +131,16 @@ class LessonPlayer {
     this.position = 0;
     this.duration = 0;
     sound.play();
+    try {
+      // 注册到系统媒体会话：通知栏/锁屏显示播放卡片，后台可继续播放
+      sound.setActiveForLockScreen(
+        true,
+        { title: title ?? '60s', artist: '60s 英语听读' },
+        { showSeekForward: true, showSeekBackward: true },
+      );
+    } catch {
+      // 个别机型媒体会话注册失败时不影响正常播放
+    }
     this.emit();
   }
 

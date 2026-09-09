@@ -2,7 +2,7 @@
   "expo": {
     "name": "60s",
     "slug": "sixtyseconds",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -30,7 +30,13 @@
       "predictiveBackGestureEnabled": false
     },
     "plugins": [
-      "expo-audio"
+      [
+        "expo-audio",
+        {
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": true
+        }
+      ]
     ]
   }
 }
