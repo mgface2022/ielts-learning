@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useMemo, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -15,10 +15,12 @@ import type { Article } from '../types';
 import { usePlayer } from '../usePlayer';
 
 const TABS = ['听读', '词汇', '词块', '译文'] as const;
-// 窗口宽度达到该值（dp）时启用分屏：左边听读/词汇/词块，右边固定显示译文。
+// 分屏时右栏可切换的内容
+const RIGHT_TABS = ['译文', '词汇', '词块'] as const;
+// 窗口宽度达到该值（dp）时启用分屏：左边固定听读，右边译文/词汇/词块可切换。
 // 取 Android 官方窗口尺寸分级的 medium 边界 600dp：折叠屏展开的内屏（竖持约
 // 690dp，随显示缩放浮动）、平板、手机横屏都会命中；折叠屏外屏和直板机竖屏
-// （通常 360~450dp）不受影响。之前用 700 会漏掉竖持的 Find N5 内屏。
+// （通常 360~450dp）不受影响。
 const WIDE_BREAKPOINT = 600;
 
 type Props = {
@@ -31,25 +33,81 @@ type Props = {
   onToggleFavorite: (id: string) => void;
 };
 
-/** 在句子文本里高亮命中的词/词块（大小写不敏感） */
-function markTerm(text: string, term: string | undefined, keyPrefix: string): ReactNode {
-  if (!term) return text;
-  const lower = text.toLowerCase();
-  const needle = term.toLowerCase();
-  let idx = lower.indexOf(needle);
-  if (idx < 0) return text;
+/** 正文中要标记的词条：term 是在正文里实际出现的形式，num 是词表序号 */
+type MarkTerm = { term: string; num?: number };
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function hasWholeMatch(body: string, term: string): boolean {
+  return new RegExp(`\\b${escapeRegExp(term)}\\b`, 'i').test(body);
+}
+
+// 只剩这类占位/虚词时不值得在正文里标记
+const FILLER = /^(sth|sb|do|does|doing|did|one'?s|a|an|the|to|of|for|in|on|at|be|is|are|was|were)$/i;
+
+/**
+ * 找出词条在正文里实际出现的形式。
+ * 词汇可能给的是原形（正文是变形），词块常带 "doing sth" 这类占位词，
+ * 所以按"最长连续词片段"降级匹配：整条 → 去头去尾的子片段 → 单个实词。
+ */
+function resolveTerm(en: string, lemma: string | null | undefined, body: string): string | null {
+  if (hasWholeMatch(body, en)) return en;
+  if (lemma && hasWholeMatch(body, lemma)) return lemma;
+  const tokens = en.split(/\s+/).filter(Boolean);
+  for (let len = tokens.length - 1; len >= 1; len--) {
+    for (let start = 0; start + len <= tokens.length; start++) {
+      const candidate = tokens.slice(start, start + len).join(' ');
+      if (len === 1 && FILLER.test(candidate)) continue;
+      if (hasWholeMatch(body, candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
+/** 在一段文本里标出所有词条（整词匹配、大小写不敏感），可选带序号上标 */
+function markTerms(text: string, terms: MarkTerm[], keyPrefix: string): ReactNode {
+  if (terms.length === 0) return text;
+  const matches: { start: number; end: number; num?: number }[] = [];
+  for (const { term, num } of terms) {
+    if (!term) continue;
+    const re = new RegExp(`\\b${escapeRegExp(term)}\\b`, 'gi');
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      matches.push({ start: m.index, end: m.index + m[0].length, num });
+    }
+  }
+  if (matches.length === 0) return text;
+  // 位置相同时长的优先，重叠的丢弃
+  matches.sort((a, b) => a.start - b.start || b.end - a.end);
+  const kept: typeof matches = [];
+  let lastEnd = -1;
+  for (const m of matches) {
+    if (m.start >= lastEnd) {
+      kept.push(m);
+      lastEnd = m.end;
+    }
+  }
   const parts: ReactNode[] = [];
   let pos = 0;
   let seq = 0;
-  while (idx >= 0) {
-    if (idx > pos) parts.push(text.slice(pos, idx));
+  for (const m of kept) {
+    if (m.start > pos) parts.push(text.slice(pos, m.start));
     parts.push(
-      <Text key={`${keyPrefix}-${seq++}`} style={styles.mark}>
-        {text.slice(idx, idx + term.length)}
+      <Text key={`${keyPrefix}-m${seq}`} style={styles.mark}>
+        {text.slice(m.start, m.end)}
       </Text>,
     );
-    pos = idx + term.length;
-    idx = lower.indexOf(needle, pos);
+    if (m.num != null) {
+      parts.push(
+        <Text key={`${keyPrefix}-n${seq}`} style={styles.markNum}>
+          {m.num}
+        </Text>,
+      );
+    }
+    seq += 1;
+    pos = m.end;
   }
   parts.push(text.slice(pos));
   return parts;
@@ -65,29 +123,102 @@ export function ArticleScreen({
   onToggleFavorite,
 }: Props) {
   const [tab, setTab] = useState<(typeof TABS)[number]>('听读');
+  const [rightTab, setRightTab] = useState<(typeof RIGHT_TABS)[number]>('译文');
   const playback = usePlayer();
   const bodyId = `body:${article.id}`;
   const isBody = playback.currentId === bodyId;
   const { width } = useWindowDimensions();
   const wide = width >= WIDE_BREAKPOINT;
-  // 分屏时译文常驻右栏，左栏不再需要译文 tab；
-  // 若从窄屏的译文 tab 展开屏幕，左栏自动落回听读
-  const tabs = wide ? TABS.slice(0, 3) : TABS;
-  const shownTab = wide && tab === '译文' ? '听读' : tab;
 
-  return (
-    <View style={styles.root}>
-      <View style={styles.topBar}>
-        <Pressable onPress={onBack} hitSlop={12} style={styles.backBtn}>
-          <Text style={styles.back}>返回</Text>
-        </Pressable>
-        <Pressable onPress={onToggleLearned} hitSlop={8} style={styles.learnBtn}>
-          <Text style={[styles.learn, learned && styles.learnOn]}>
-            {learned ? '已学' : '标为已学'}
-          </Text>
-        </Pressable>
-      </View>
+  // 正文里要标记的词条：右栏显示词汇/词块时带序号标出每个出现位置；
+  // 从复习页跳转带来的 highlight 词永远标出（无序号）
+  const bodyMarks = useMemo<MarkTerm[]>(() => {
+    const list: MarkTerm[] = [];
+    if (wide && rightTab === '词汇') {
+      article.vocab.forEach((item, index) => {
+        const term = resolveTerm(item.en, item.lemma, article.body);
+        if (term) list.push({ term, num: index + 1 });
+      });
+    } else if (wide && rightTab === '词块') {
+      article.chunks.forEach((item, index) => {
+        const term = resolveTerm(item.en, null, article.body);
+        if (term) list.push({ term, num: index + 1 });
+      });
+    }
+    if (highlight) list.push({ term: highlight });
+    return list;
+  }, [wide, rightTab, article, highlight]);
 
+  const bodyNode =
+    article.sentences && article.sentences.length > 0 ? (
+      <Text style={styles.body}>
+        {article.sentences.map((sentence, index) => {
+          const next = article.sentences![index + 1];
+          const active =
+            isBody &&
+            playback.position >= sentence.start &&
+            (next ? playback.position < next.start : playback.position <= sentence.end + 500);
+          return (
+            <Text
+              key={index}
+              suppressHighlighting
+              style={active ? styles.sentenceOn : undefined}
+              onPress={() => {
+                void player.playFrom(bodyId, article.bodyAudio, sentence.start, article.title);
+              }}
+            >
+              {markTerms(sentence.text, bodyMarks, `s${index}`)}
+              {index < article.sentences!.length - 1 ? ' ' : ''}
+            </Text>
+          );
+        })}
+      </Text>
+    ) : (
+      <Text style={styles.body}>{markTerms(article.body, bodyMarks, 'b')}</Text>
+    );
+
+  const vocabRows = article.vocab.map((item, index) => {
+    const id = `vocab:${article.id}:${index}`;
+    return (
+      <EntryRow
+        key={`${item.en}-${index}`}
+        num={index + 1}
+        id={id}
+        audio={item.audio}
+        title={item.en}
+        subtitle={`${item.pos ?? ''}${item.lemma ? ` · ${item.lemma}` : ''}  ${item.zh}`.trim()}
+        currentId={playback.currentId}
+        playing={playback.playing}
+        progress={playback.progress}
+        favorite={favorites.has(id)}
+        onToggleFavorite={() => onToggleFavorite(id)}
+      />
+    );
+  });
+
+  const chunkRows = article.chunks.map((item, index) => {
+    const id = `chunk:${article.id}:${index}`;
+    return (
+      <EntryRow
+        key={`${item.en}-${index}`}
+        num={index + 1}
+        id={id}
+        audio={item.audio}
+        title={item.en}
+        subtitle={item.zh}
+        currentId={playback.currentId}
+        playing={playback.playing}
+        progress={playback.progress}
+        favorite={favorites.has(id)}
+        onToggleFavorite={() => onToggleFavorite(id)}
+      />
+    );
+  });
+
+  // 编号/标题/播放器：窄屏横跨全屏，宽屏归入左栏，
+  // 让右栏从顶栏下方直接开始排布，左右真正各占一半
+  const headerNode = (
+    <>
       <Text style={styles.kicker}>{numberLabel(article.number)}</Text>
       <Text style={styles.title}>{article.title}</Text>
 
@@ -108,12 +239,61 @@ export function ArticleScreen({
           </Text>
         </View>
       </View>
+    </>
+  );
 
-      <View style={[styles.content, wide && styles.contentWide]}>
-        <View style={styles.mainPane}>
+  return (
+    <View style={styles.root}>
+      <View style={styles.topBar}>
+        <Pressable onPress={onBack} hitSlop={12} style={styles.backBtn}>
+          <Text style={styles.back}>返回</Text>
+        </Pressable>
+        <Pressable onPress={onToggleLearned} hitSlop={8} style={styles.learnBtn}>
+          <Text style={[styles.learn, learned && styles.learnOn]}>
+            {learned ? '已学' : '标为已学'}
+          </Text>
+        </Pressable>
+      </View>
+
+      {wide ? (
+        <View style={[styles.content, styles.contentWide]}>
+          <View style={styles.mainPane}>
+            {headerNode}
+            <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+              {bodyNode}
+            </ScrollView>
+          </View>
+
+          <View style={styles.rightPane}>
+            <View style={styles.tabs}>
+              {RIGHT_TABS.map((item) => {
+                const active = item === rightTab;
+                return (
+                  <Pressable
+                    key={item}
+                    onPress={() => setRightTab(item)}
+                    style={[styles.tab, active && styles.tabOn]}
+                  >
+                    <Text style={[styles.tabText, active && styles.tabTextOn]}>{item}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+              {rightTab === '译文' ? (
+                <Text style={styles.translation}>{article.translation}</Text>
+              ) : null}
+              {rightTab === '词汇' ? vocabRows : null}
+              {rightTab === '词块' ? chunkRows : null}
+            </ScrollView>
+          </View>
+        </View>
+      ) : (
+        <View style={styles.content}>
+          {headerNode}
           <View style={styles.tabs}>
-            {tabs.map((item) => {
-              const active = item === shownTab;
+            {TABS.map((item) => {
+              const active = item === tab;
               return (
                 <Pressable
                   key={item}
@@ -125,101 +305,20 @@ export function ArticleScreen({
               );
             })}
           </View>
-
           <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-            {shownTab === '听读' ? (
-              article.sentences && article.sentences.length > 0 ? (
-                <Text style={styles.body}>
-                  {article.sentences.map((sentence, index) => {
-                    const next = article.sentences![index + 1];
-                    const active =
-                      isBody &&
-                      playback.position >= sentence.start &&
-                      (next
-                        ? playback.position < next.start
-                        : playback.position <= sentence.end + 500);
-                    return (
-                      <Text
-                        key={index}
-                        suppressHighlighting
-                        style={active ? styles.sentenceOn : undefined}
-                        onPress={() => {
-                          void player.playFrom(
-                            bodyId,
-                            article.bodyAudio,
-                            sentence.start,
-                            article.title,
-                          );
-                        }}
-                      >
-                        {markTerm(sentence.text, highlight, `s${index}`)}
-                        {index < article.sentences!.length - 1 ? ' ' : ''}
-                      </Text>
-                    );
-                  })}
-                </Text>
-              ) : (
-                <Text style={styles.body}>{markTerm(article.body, highlight, 'b')}</Text>
-              )
-            ) : null}
-            {shownTab === '词汇'
-              ? article.vocab.map((item, index) => {
-                  const id = `vocab:${article.id}:${index}`;
-                  return (
-                    <EntryRow
-                      key={`${item.en}-${index}`}
-                      id={id}
-                      audio={item.audio}
-                      title={item.en}
-                      subtitle={`${item.pos ?? ''}${item.lemma ? ` · ${item.lemma}` : ''}  ${item.zh}`.trim()}
-                      currentId={playback.currentId}
-                      playing={playback.playing}
-                      progress={playback.progress}
-                      favorite={favorites.has(id)}
-                      onToggleFavorite={() => onToggleFavorite(id)}
-                    />
-                  );
-                })
-              : null}
-            {shownTab === '词块'
-              ? article.chunks.map((item, index) => {
-                  const id = `chunk:${article.id}:${index}`;
-                  return (
-                    <EntryRow
-                      key={`${item.en}-${index}`}
-                      id={id}
-                      audio={item.audio}
-                      title={item.en}
-                      subtitle={item.zh}
-                      currentId={playback.currentId}
-                      playing={playback.playing}
-                      progress={playback.progress}
-                      favorite={favorites.has(id)}
-                      onToggleFavorite={() => onToggleFavorite(id)}
-                    />
-                  );
-                })
-              : null}
-            {!wide && shownTab === '译文' ? (
-              <Text style={styles.translation}>{article.translation}</Text>
-            ) : null}
+            {tab === '听读' ? bodyNode : null}
+            {tab === '词汇' ? vocabRows : null}
+            {tab === '词块' ? chunkRows : null}
+            {tab === '译文' ? <Text style={styles.translation}>{article.translation}</Text> : null}
           </ScrollView>
         </View>
-
-        {wide ? (
-          <View style={styles.transPane}>
-            <Text style={styles.transHeading}>译文</Text>
-            <ScrollView contentContainerStyle={styles.transScroll}>
-              <Text style={styles.translation}>{article.translation}</Text>
-            </ScrollView>
-          </View>
-        ) : null}
-      </View>
+      )}
     </View>
   );
 }
 
 function EntryRow({
+  num,
   id,
   audio,
   title,
@@ -230,6 +329,7 @@ function EntryRow({
   favorite,
   onToggleFavorite,
 }: {
+  num: number;
   id: string;
   audio: string;
   title: string;
@@ -243,6 +343,7 @@ function EntryRow({
   const active = currentId === id;
   return (
     <View style={styles.entry}>
+      <Text style={styles.entryNum}>{num}</Text>
       <TickPlayButton
         size={52}
         playing={active && playing}
@@ -303,25 +404,14 @@ const styles = StyleSheet.create({
   playerMeta: { marginTop: 4, color: colors.mist, fontSize: 13 },
   content: { flex: 1 },
   contentWide: { flexDirection: 'row' },
-  mainPane: { flex: 1.15 },
-  transPane: {
+  // 左右两栏平分屏幕宽度
+  mainPane: { flex: 1 },
+  rightPane: {
     flex: 1,
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderLeftColor: colors.line,
     backgroundColor: colors.card,
   },
-  transHeading: {
-    paddingHorizontal: space.lg,
-    paddingTop: 12,
-    paddingBottom: 8,
-    color: colors.second,
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 1,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.line,
-  },
-  transScroll: { padding: space.lg, paddingBottom: 48 },
   tabs: {
     flexDirection: 'row',
     paddingHorizontal: space.lg,
@@ -356,6 +446,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     textDecorationLine: 'underline',
   },
+  markNum: {
+    color: colors.second,
+    fontSize: 11,
+    fontWeight: '800',
+  },
   translation: {
     color: colors.ink,
     fontSize: 17,
@@ -368,6 +463,14 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.line,
+  },
+  entryNum: {
+    minWidth: 22,
+    color: colors.second,
+    fontSize: 14,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+    textAlign: 'right',
   },
   entryEn: { color: colors.ink, fontSize: 16, fontWeight: '700' },
   entryZh: { marginTop: 3, color: colors.mist, fontSize: 14, lineHeight: 20 },
