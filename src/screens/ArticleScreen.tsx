@@ -4,6 +4,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { TickPlayButton } from '../components/TickPlayButton';
@@ -14,6 +15,11 @@ import type { Article } from '../types';
 import { usePlayer } from '../usePlayer';
 
 const TABS = ['听读', '词汇', '词块', '译文'] as const;
+// 窗口宽度达到该值（dp）时启用分屏：左边听读/词汇/词块，右边固定显示译文。
+// 取 Android 官方窗口尺寸分级的 medium 边界 600dp：折叠屏展开的内屏（竖持约
+// 690dp，随显示缩放浮动）、平板、手机横屏都会命中；折叠屏外屏和直板机竖屏
+// （通常 360~450dp）不受影响。之前用 700 会漏掉竖持的 Find N5 内屏。
+const WIDE_BREAKPOINT = 600;
 
 type Props = {
   article: Article;
@@ -62,6 +68,12 @@ export function ArticleScreen({
   const playback = usePlayer();
   const bodyId = `body:${article.id}`;
   const isBody = playback.currentId === bodyId;
+  const { width } = useWindowDimensions();
+  const wide = width >= WIDE_BREAKPOINT;
+  // 分屏时译文常驻右栏，左栏不再需要译文 tab；
+  // 若从窄屏的译文 tab 展开屏幕，左栏自动落回听读
+  const tabs = wide ? TABS.slice(0, 3) : TABS;
+  const shownTab = wide && tab === '译文' ? '听读' : tab;
 
   return (
     <View style={styles.root}>
@@ -97,90 +109,112 @@ export function ArticleScreen({
         </View>
       </View>
 
-      <View style={styles.tabs}>
-        {TABS.map((item) => {
-          const active = item === tab;
-          return (
-            <Pressable
-              key={item}
-              onPress={() => setTab(item)}
-              style={[styles.tab, active && styles.tabOn]}
-            >
-              <Text style={[styles.tabText, active && styles.tabTextOn]}>{item}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      <View style={[styles.content, wide && styles.contentWide]}>
+        <View style={styles.mainPane}>
+          <View style={styles.tabs}>
+            {tabs.map((item) => {
+              const active = item === shownTab;
+              return (
+                <Pressable
+                  key={item}
+                  onPress={() => setTab(item)}
+                  style={[styles.tab, active && styles.tabOn]}
+                >
+                  <Text style={[styles.tabText, active && styles.tabTextOn]}>{item}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {tab === '听读' ? (
-          article.sentences && article.sentences.length > 0 ? (
-            <Text style={styles.body}>
-              {article.sentences.map((sentence, index) => {
-                const next = article.sentences![index + 1];
-                const active =
-                  isBody &&
-                  playback.position >= sentence.start &&
-                  (next ? playback.position < next.start : playback.position <= sentence.end + 500);
-                return (
-                  <Text
-                    key={index}
-                    suppressHighlighting
-                    style={active ? styles.sentenceOn : undefined}
-                    onPress={() => {
-                      void player.playFrom(bodyId, article.bodyAudio, sentence.start, article.title);
-                    }}
-                  >
-                    {markTerm(sentence.text, highlight, `s${index}`)}
-                    {index < article.sentences!.length - 1 ? ' ' : ''}
-                  </Text>
-                );
-              })}
-            </Text>
-          ) : (
-            <Text style={styles.body}>{markTerm(article.body, highlight, 'b')}</Text>
-          )
+          <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+            {shownTab === '听读' ? (
+              article.sentences && article.sentences.length > 0 ? (
+                <Text style={styles.body}>
+                  {article.sentences.map((sentence, index) => {
+                    const next = article.sentences![index + 1];
+                    const active =
+                      isBody &&
+                      playback.position >= sentence.start &&
+                      (next
+                        ? playback.position < next.start
+                        : playback.position <= sentence.end + 500);
+                    return (
+                      <Text
+                        key={index}
+                        suppressHighlighting
+                        style={active ? styles.sentenceOn : undefined}
+                        onPress={() => {
+                          void player.playFrom(
+                            bodyId,
+                            article.bodyAudio,
+                            sentence.start,
+                            article.title,
+                          );
+                        }}
+                      >
+                        {markTerm(sentence.text, highlight, `s${index}`)}
+                        {index < article.sentences!.length - 1 ? ' ' : ''}
+                      </Text>
+                    );
+                  })}
+                </Text>
+              ) : (
+                <Text style={styles.body}>{markTerm(article.body, highlight, 'b')}</Text>
+              )
+            ) : null}
+            {shownTab === '词汇'
+              ? article.vocab.map((item, index) => {
+                  const id = `vocab:${article.id}:${index}`;
+                  return (
+                    <EntryRow
+                      key={`${item.en}-${index}`}
+                      id={id}
+                      audio={item.audio}
+                      title={item.en}
+                      subtitle={`${item.pos ?? ''}${item.lemma ? ` · ${item.lemma}` : ''}  ${item.zh}`.trim()}
+                      currentId={playback.currentId}
+                      playing={playback.playing}
+                      progress={playback.progress}
+                      favorite={favorites.has(id)}
+                      onToggleFavorite={() => onToggleFavorite(id)}
+                    />
+                  );
+                })
+              : null}
+            {shownTab === '词块'
+              ? article.chunks.map((item, index) => {
+                  const id = `chunk:${article.id}:${index}`;
+                  return (
+                    <EntryRow
+                      key={`${item.en}-${index}`}
+                      id={id}
+                      audio={item.audio}
+                      title={item.en}
+                      subtitle={item.zh}
+                      currentId={playback.currentId}
+                      playing={playback.playing}
+                      progress={playback.progress}
+                      favorite={favorites.has(id)}
+                      onToggleFavorite={() => onToggleFavorite(id)}
+                    />
+                  );
+                })
+              : null}
+            {!wide && shownTab === '译文' ? (
+              <Text style={styles.translation}>{article.translation}</Text>
+            ) : null}
+          </ScrollView>
+        </View>
+
+        {wide ? (
+          <View style={styles.transPane}>
+            <Text style={styles.transHeading}>译文</Text>
+            <ScrollView contentContainerStyle={styles.transScroll}>
+              <Text style={styles.translation}>{article.translation}</Text>
+            </ScrollView>
+          </View>
         ) : null}
-        {tab === '词汇'
-          ? article.vocab.map((item, index) => {
-              const id = `vocab:${article.id}:${index}`;
-              return (
-                <EntryRow
-                  key={`${item.en}-${index}`}
-                  id={id}
-                  audio={item.audio}
-                  title={item.en}
-                  subtitle={`${item.pos ?? ''}${item.lemma ? ` · ${item.lemma}` : ''}  ${item.zh}`.trim()}
-                  currentId={playback.currentId}
-                  playing={playback.playing}
-                  progress={playback.progress}
-                  favorite={favorites.has(id)}
-                  onToggleFavorite={() => onToggleFavorite(id)}
-                />
-              );
-            })
-          : null}
-        {tab === '词块'
-          ? article.chunks.map((item, index) => {
-              const id = `chunk:${article.id}:${index}`;
-              return (
-                <EntryRow
-                  key={`${item.en}-${index}`}
-                  id={id}
-                  audio={item.audio}
-                  title={item.en}
-                  subtitle={item.zh}
-                  currentId={playback.currentId}
-                  playing={playback.playing}
-                  progress={playback.progress}
-                  favorite={favorites.has(id)}
-                  onToggleFavorite={() => onToggleFavorite(id)}
-                />
-              );
-            })
-          : null}
-        {tab === '译文' ? <Text style={styles.translation}>{article.translation}</Text> : null}
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -267,6 +301,27 @@ const styles = StyleSheet.create({
   },
   playerTitle: { color: colors.ink, fontSize: 18, fontWeight: '800' },
   playerMeta: { marginTop: 4, color: colors.mist, fontSize: 13 },
+  content: { flex: 1 },
+  contentWide: { flexDirection: 'row' },
+  mainPane: { flex: 1.15 },
+  transPane: {
+    flex: 1,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: colors.line,
+    backgroundColor: colors.card,
+  },
+  transHeading: {
+    paddingHorizontal: space.lg,
+    paddingTop: 12,
+    paddingBottom: 8,
+    color: colors.second,
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.line,
+  },
+  transScroll: { padding: space.lg, paddingBottom: 48 },
   tabs: {
     flexDirection: 'row',
     paddingHorizontal: space.lg,

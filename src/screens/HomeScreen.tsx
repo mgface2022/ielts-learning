@@ -19,12 +19,17 @@ type Props = {
   onOpenReview: () => void;
 };
 
+// 行高固定，才能在打开 App 时精确滚动定位到上次学习的文章
+const ROW_HEIGHT = 64;
+
 export function HomeScreen({ learned, lastId, favoriteCount, onOpen, onOpenReview }: Props) {
   const articles = useMemo(() => loadArticles(), []);
   const [query, setQuery] = useState('');
   const filtered = useMemo(() => searchArticles(articles, query), [articles, query]);
   const last = articles.find((item) => item.id === lastId);
   const learnedCount = articles.filter((item) => learned.has(item.id)).length;
+  // 打开 App 时列表直接定位到上次学习的那篇（仅首次挂载生效，搜索不受影响）
+  const lastIndex = last ? articles.findIndex((item) => item.id === last.id) : -1;
 
   return (
     <View style={styles.root}>
@@ -80,6 +85,12 @@ export function HomeScreen({ learned, lastId, favoriteCount, onOpen, onOpenRevie
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
         keyboardShouldPersistTaps="handled"
+        initialScrollIndex={lastIndex > 0 ? lastIndex : undefined}
+        getItemLayout={(_, index) => ({
+          length: ROW_HEIGHT,
+          offset: ROW_HEIGHT * index,
+          index,
+        })}
         renderItem={({ item }) => {
           const done = learned.has(item.id);
           return (
@@ -89,7 +100,9 @@ export function HomeScreen({ learned, lastId, favoriteCount, onOpen, onOpenRevie
             >
               <Text style={styles.num}>{numberLabel(item.number)}</Text>
               <View style={styles.rowBody}>
-                <Text style={styles.title}>{item.title}</Text>
+                <Text style={styles.title} numberOfLines={1}>
+                  {item.title}
+                </Text>
                 <Text style={styles.meta} numberOfLines={1}>
                   {item.vocab.length} 词 · {item.chunks.length} 词块
                   {done ? ' · 已学' : ''}
@@ -194,10 +207,9 @@ const styles = StyleSheet.create({
   },
   list: { paddingHorizontal: space.lg, paddingBottom: 40 },
   row: {
-    minHeight: 64,
+    height: ROW_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.line,
     gap: 12,
