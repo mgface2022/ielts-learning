@@ -42,8 +42,9 @@ yarn-error.*
 /ios
 *.apk
 
-# 音频由 scripts/sync-android-audio.js 从 assets/audio 复制而来，不重复入库
+# 音频和文章目录由 scripts/sync-android-audio.js 从 assets/ 复制而来，不重复入库
 android/app/src/main/assets/audio/
+android/app/src/main/assets/articles.json
 
 # 调试签名是公开的通用密钥，允许入库；正式签名密钥绝不入库
 !android/app/debug.keystore

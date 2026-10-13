@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 2×1：播放暂停 + 当前课文 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="14dp"
+    android:paddingEnd="8dp"
+    android:paddingTop="8dp"
+    android:paddingBottom="8dp">
+
+  <LinearLayout
+      android:id="@+id/widget_title_area"
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_weight="1"
+      android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/widget_number"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFamily="sans-serif-black"
+        android:letterSpacing="0.08"
+        android:text="--"
+        android:textColor="@color/widgetAccent"
+        android:textSize="11sp" />
+
+    <TextView
+        android:id="@+id/widget_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:ellipsize="end"
+        android:fontFamily="sans-serif-medium"
+        android:singleLine="true"
+        android:text="60s"
+        android:textColor="@color/widgetText"
+        android:textSize="14sp" />
+  </LinearLayout>
+
+  <ImageButton
+      android:id="@+id/widget_toggle"
+      android:layout_width="44dp"
+      android:layout_height="44dp"
+      android:background="@drawable/widget_btn_accent_bg"
+      android:contentDescription="播放"
+      android:scaleType="centerInside"
+      android:src="@android:drawable/ic_media_play"
+      android:tint="@color/widgetText" />
+</LinearLayout>

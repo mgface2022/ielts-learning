@@ -136,7 +136,12 @@ export function ArticleScreen({
   // 折叠/展开时也会重新触发。窗口宽度只作首帧未测量前的兜底。
   const { width: windowWidth } = useWindowDimensions();
   const [measuredWidth, setMeasuredWidth] = useState(0);
-  const wide = (measuredWidth > 0 ? measuredWidth : windowWidth) >= WIDE_BREAKPOINT;
+  const layoutWidth = measuredWidth > 0 ? measuredWidth : windowWidth;
+  const wide = layoutWidth >= WIDE_BREAKPOINT;
+  // 两栏不用 flex 平分（尺寸切换过程中布局引擎可能分配不均），
+  // 直接按实测宽度显式各取一半，中线一定在实际画面正中
+  const leftWidth = Math.floor(layoutWidth / 2);
+  const rightWidth = layoutWidth - leftWidth;
 
   // 正文里要标记的词条：右栏显示词汇/词块时带序号标出每个出现位置；
   // 从复习页跳转带来的 highlight 词永远标出（无序号）
@@ -288,15 +293,20 @@ export function ArticleScreen({
       </View>
 
       {wide ? (
-        <View style={[styles.content, styles.contentWide]}>
-          <View style={styles.mainPane}>
+        // key 绑定实测宽度：展开/折叠导致宽度变化时整块重建，
+        // 避免已挂载的分屏在尺寸切换过程中残留旧布局（等价于"返回再进"）
+        <View
+          key={`split-${Math.round(measuredWidth)}`}
+          style={[styles.content, styles.contentWide]}
+        >
+          <View style={[styles.mainPane, { width: leftWidth }]}>
             {headerNode}
             <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
               {bodyNode}
             </ScrollView>
           </View>
 
-          <View style={styles.rightPane}>
+          <View style={[styles.rightPane, { width: rightWidth }]}>
             <View style={styles.tabs}>
               {RIGHT_TABS.map((item) => {
                 const active = item === rightTab;
@@ -455,10 +465,9 @@ const styles = StyleSheet.create({
   loopTextOn: { color: colors.white },
   content: { flex: 1 },
   contentWide: { flexDirection: 'row' },
-  // 左右两栏平分屏幕宽度
-  mainPane: { flex: 1 },
+  // 左右两栏宽度由 leftWidth / rightWidth 显式指定，这里不设 flex
+  mainPane: {},
   rightPane: {
-    flex: 1,
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderLeftColor: colors.line,
     backgroundColor: colors.card,

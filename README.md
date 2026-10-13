@@ -89,6 +89,12 @@ React Native（下面简称 RN）让你用 React 的写法（组件、JSX、hook
 
 文章内容源自 `60pieces` 的 Markdown 文件。音频和时间轴由 `scripts/gen-body-timings.py` 生成：它调用微软 Edge TTS（`edge-tts` Python 库，美式女声 `en-US-JennyNeural`）合成语音，同时接收 TTS 返回的 **WordBoundary 事件**（每个单词在音频里的精确毫秒位置），再把逐词时间聚合成逐句的 `{text, start, end}` 写进 `articles.json`。这就是"听读页音频播到哪句、哪句就高亮"的数据基础——App 运行时只是拿播放进度和句子时间轴做对比，不需要任何在线服务。
 
+### 桌面小组件（Android 原生）
+
+`android/app/src/main/java/app/sixtyseconds/widget/` 下是纯 Kotlin 实现的两个桌面小组件（4×1 带上一篇/下一篇，2×1 只有播放键）和一个后台播放服务 `PlaybackService`。它**不依赖 JS 运行时**：用 Android 自带的 `MediaPlayer` 直接读 APK 里的音频，所以 App 没打开也能播；通过系统音频焦点和 App 内的 `expo-audio` 互斥，不会两边同时出声。小组件会跟随 App 内最后打开的那篇（直接读 AsyncStorage 的 SQLite 文件取 `sixty.lastId`）。原生侧需要文章目录，所以 `scripts/sync-android-audio.js` 现在也会把 `articles.json` 复制进 Android assets。
+
+注意：这些原生文件在 `expo prebuild --clean` 时会被清掉，`android/` 目录已提交进 git，不要随意重新 prebuild。
+
 ### 几个关键实现
 
 - **音频播放（`src/player.ts`）**：全局单例。切换音频时先 `pause()` 再释放旧播放器，避免两段声音同时响；通过 `setActiveForLockScreen` 注册到 Android 媒体会话，实现通知栏播放卡片和后台播放；`playFrom()` 支持从指定毫秒开始播（点句跳转用）。

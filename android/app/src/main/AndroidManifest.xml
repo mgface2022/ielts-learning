@@ -4,6 +4,9 @@
   <uses-permission android:name="android.permission.VIBRATE"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+  <!-- 桌面小组件后台播放：保持 CPU 唤醒、显示播放控制通知 -->
+  <uses-permission android:name="android.permission.WAKE_LOCK"/>
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
   <queries>
     <intent>
       <action android:name="android.intent.action.VIEW"/>
@@ -34,5 +37,20 @@
         <action android:name="androidx.media3.session.MediaSessionService"/>
       </intent-filter>
     </service>
+
+    <!-- 桌面小组件：后台播放服务 + 两种尺寸的小组件 -->
+    <service android:name=".widget.PlaybackService" android:exported="false" android:foregroundServiceType="mediaPlayback"/>
+    <receiver android:name=".widget.LessonWidgetLarge" android:exported="true" android:label="@string/widget_large_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+      </intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_lesson_large_info"/>
+    </receiver>
+    <receiver android:name=".widget.LessonWidgetSmall" android:exported="true" android:label="@string/widget_small_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
+      </intent-filter>
+      <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_lesson_small_info"/>
+    </receiver>
   </application>
 </manifest>

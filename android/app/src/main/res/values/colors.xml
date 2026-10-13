@@ -2,4 +2,8 @@
   <color name="splashscreen_background">#E7EFE6</color>
   <color name="iconBackground">#163027</color>
   <color name="colorPrimary">#023c69</color>
+  <!-- 桌面小组件配色，和 App 内 theme.ts 保持一致 -->
+  <color name="widgetBackground">#163027</color>
+  <color name="widgetAccent">#D85A1A</color>
+  <color name="widgetText">#FFFFFF</color>
 </resources>
