@@ -11,10 +11,12 @@ import { ArticleScreen } from './src/screens/ArticleScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { ReviewScreen } from './src/screens/ReviewScreen';
 import { findArticle } from './src/articles';
+import { player } from './src/player';
 import {
   loadFavorites,
   loadLastId,
   loadLearned,
+  loadLoopCount,
   saveFavorites,
   saveLastId,
   saveLearned,
@@ -33,6 +35,8 @@ export default function App() {
       setLearned(await loadLearned());
       setFavorites(await loadFavorites());
       setLastId(await loadLastId());
+      // 恢复上次选择的正文循环次数
+      player.setLoop(await loadLoopCount());
     })();
   }, []);
 

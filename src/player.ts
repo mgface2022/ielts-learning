@@ -13,7 +13,16 @@ export type PlayerSnapshot = {
   position: number;
   duration: number;
   progress: number;
+  /** 正文循环目标次数（1 = 不循环） */
+  loopTarget: number;
+  /** 当前正在播的是第几遍（从 1 开始） */
+  loopIndex: number;
 };
+
+/** 只有正文音频参与循环，词汇/词块单条发音不循环 */
+function isLoopable(id: string | null): boolean {
+  return !!id && id.startsWith('body:');
+}
 
 let audioModeReady = false;
 
@@ -39,12 +48,17 @@ class LessonPlayer {
   playing = false;
   position = 0;
   duration = 0;
+  loopTarget = 1;
+  /** 已完整播完的遍数 */
+  private loopDone = 0;
   snapshot: PlayerSnapshot = {
     currentId: null,
     playing: false,
     position: 0,
     duration: 0,
     progress: 0,
+    loopTarget: 1,
+    loopIndex: 1,
   };
   private listeners = new Set<Listener>();
 
@@ -60,8 +74,16 @@ class LessonPlayer {
       position: this.position,
       duration: this.duration,
       progress: this.duration <= 0 ? 0 : Math.min(1, this.position / this.duration),
+      loopTarget: this.loopTarget,
+      loopIndex: Math.min(this.loopDone + 1, this.loopTarget),
     };
     this.listeners.forEach((fn) => fn());
+  }
+
+  /** 设置正文循环次数；播放中途改也立即生效 */
+  setLoop(target: number): void {
+    this.loopTarget = Math.max(1, Math.floor(target));
+    this.emit();
   }
 
   isCurrent(id: string): boolean {
@@ -74,10 +96,23 @@ class LessonPlayer {
     this.position = Math.round(status.currentTime * 1000);
     this.duration = Math.round(status.duration * 1000);
     if (status.didJustFinish) {
-      this.playing = false;
-      this.position = 0;
-      this.sound?.pause();
-      this.sound?.seekTo(0).catch(() => {});
+      this.loopDone += 1;
+      const sound = this.sound;
+      if (sound && isLoopable(this.currentId) && this.loopDone < this.loopTarget) {
+        // 还没播够次数：回到开头接着播下一遍
+        this.playing = true;
+        this.position = 0;
+        sound
+          .seekTo(0)
+          .then(() => sound.play())
+          .catch(() => {});
+      } else {
+        this.playing = false;
+        this.position = 0;
+        this.loopDone = 0;
+        sound?.pause();
+        sound?.seekTo(0).catch(() => {});
+      }
     }
     this.emit();
   };
@@ -116,6 +151,7 @@ class LessonPlayer {
     this.currentId = id;
     this.position = 0;
     this.duration = 0;
+    this.loopDone = 0;
     sound.play();
     try {
       // 注册到系统媒体会话：通知栏/锁屏显示播放卡片，后台可继续播放
@@ -140,6 +176,7 @@ class LessonPlayer {
       } else {
         if (this.duration > 0 && this.position >= this.duration - 200) {
           await this.sound.seekTo(0);
+          this.loopDone = 0;
         }
         this.sound.play();
       }
@@ -171,6 +208,7 @@ class LessonPlayer {
     this.playing = false;
     this.position = 0;
     this.duration = 0;
+    this.loopDone = 0;
     this.emit();
   }
 }

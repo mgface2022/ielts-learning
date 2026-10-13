@@ -10,11 +10,14 @@ import {
 import { TickPlayButton } from '../components/TickPlayButton';
 import { numberLabel } from '../articles';
 import { formatMillis, player } from '../player';
+import { saveLoopCount } from '../storage';
 import { colors, space } from '../theme';
 import type { Article } from '../types';
 import { usePlayer } from '../usePlayer';
 
 const TABS = ['听读', '词汇', '词块', '译文'] as const;
+// 正文循环播放可选次数
+const LOOP_OPTIONS = [1, 5, 10] as const;
 // 分屏时右栏可切换的内容
 const RIGHT_TABS = ['译文', '词汇', '词块'] as const;
 // 窗口宽度达到该值（dp）时启用分屏：左边固定听读，右边译文/词汇/词块可切换。
@@ -127,8 +130,13 @@ export function ArticleScreen({
   const playback = usePlayer();
   const bodyId = `body:${article.id}`;
   const isBody = playback.currentId === bodyId;
-  const { width } = useWindowDimensions();
-  const wide = width >= WIDE_BREAKPOINT;
+  // 分屏判断不能依赖 useWindowDimensions：折叠屏"小屏打开后再展开"时，
+  // 系统上报的窗口宽度和实际渲染宽度可能不同步，导致分屏中线偏移。
+  // 改用 onLayout 实测根视图宽度，它永远等于实际画出来的宽度，
+  // 折叠/展开时也会重新触发。窗口宽度只作首帧未测量前的兜底。
+  const { width: windowWidth } = useWindowDimensions();
+  const [measuredWidth, setMeasuredWidth] = useState(0);
+  const wide = (measuredWidth > 0 ? measuredWidth : windowWidth) >= WIDE_BREAKPOINT;
 
   // 正文里要标记的词条：右栏显示词汇/词块时带序号标出每个出现位置；
   // 从复习页跳转带来的 highlight 词永远标出（无序号）
@@ -234,16 +242,40 @@ export function ArticleScreen({
           <Text style={styles.playerTitle}>听全文</Text>
           <Text style={styles.playerMeta}>
             {isBody && playback.duration > 0
-              ? `${formatMillis(playback.position)} / ${formatMillis(playback.duration)}`
+              ? `${playback.loopTarget > 1 ? `第 ${playback.loopIndex} / ${playback.loopTarget} 遍 · ` : ''}${formatMillis(playback.position)} / ${formatMillis(playback.duration)}`
               : '大约一分钟 · 美式女声'}
           </Text>
+          <View style={styles.loopRow}>
+            <Text style={styles.loopLabel}>循环</Text>
+            {LOOP_OPTIONS.map((n) => {
+              const active = playback.loopTarget === n;
+              return (
+                <Pressable
+                  key={n}
+                  hitSlop={6}
+                  onPress={() => {
+                    player.setLoop(n);
+                    void saveLoopCount(n);
+                  }}
+                  style={[styles.loopPill, active && styles.loopPillOn]}
+                >
+                  <Text style={[styles.loopText, active && styles.loopTextOn]}>
+                    {n === 1 ? '1次' : `${n}次`}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
       </View>
     </>
   );
 
   return (
-    <View style={styles.root}>
+    <View
+      style={styles.root}
+      onLayout={(e) => setMeasuredWidth(e.nativeEvent.layout.width)}
+    >
       <View style={styles.topBar}>
         <Pressable onPress={onBack} hitSlop={12} style={styles.backBtn}>
           <Text style={styles.back}>返回</Text>
@@ -402,6 +434,25 @@ const styles = StyleSheet.create({
   },
   playerTitle: { color: colors.ink, fontSize: 18, fontWeight: '800' },
   playerMeta: { marginTop: 4, color: colors.mist, fontSize: 13 },
+  loopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+  },
+  loopLabel: { color: colors.mist, fontSize: 12, fontWeight: '700', marginRight: 2 },
+  loopPill: {
+    paddingHorizontal: 10,
+    height: 26,
+    borderRadius: 13,
+    justifyContent: 'center',
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  loopPillOn: { backgroundColor: colors.ink, borderColor: colors.ink },
+  loopText: { color: colors.mist, fontSize: 12, fontWeight: '700' },
+  loopTextOn: { color: colors.white },
   content: { flex: 1 },
   contentWide: { flexDirection: 'row' },
   // 左右两栏平分屏幕宽度

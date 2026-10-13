@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const LEARNED_KEY = 'sixty.learned';
 const LAST_KEY = 'sixty.lastId';
 const FAVORITES_KEY = 'sixty.favorites';
+const LOOP_KEY = 'sixty.loop';
 
 export async function loadLearned(): Promise<Set<string>> {
   const raw = await AsyncStorage.getItem(LEARNED_KEY);
@@ -38,4 +39,15 @@ export async function loadFavorites(): Promise<Set<string>> {
 
 export async function saveFavorites(ids: Set<string>): Promise<void> {
   await AsyncStorage.setItem(FAVORITES_KEY, JSON.stringify([...ids]));
+}
+
+/** 正文循环播放次数（1 = 不循环） */
+export async function loadLoopCount(): Promise<number> {
+  const raw = await AsyncStorage.getItem(LOOP_KEY);
+  const n = raw ? Number(raw) : 1;
+  return Number.isFinite(n) && n >= 1 ? n : 1;
+}
+
+export async function saveLoopCount(n: number): Promise<void> {
+  await AsyncStorage.setItem(LOOP_KEY, String(n));
 }
