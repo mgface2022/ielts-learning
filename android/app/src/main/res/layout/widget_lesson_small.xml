@@ -36,7 +36,7 @@
         android:ellipsize="end"
         android:fontFamily="sans-serif-medium"
         android:singleLine="true"
-        android:text="60s"
+        android:text="雅思词汇"
         android:textColor="@color/widgetText"
         android:textSize="14sp" />
   </LinearLayout>

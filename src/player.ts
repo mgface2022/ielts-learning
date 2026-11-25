@@ -157,7 +157,7 @@ class LessonPlayer {
       // 注册到系统媒体会话：通知栏/锁屏显示播放卡片，后台可继续播放
       sound.setActiveForLockScreen(
         true,
-        { title: title ?? '60s', artist: '60s 英语听读' },
+        { title: title ?? '雅思词汇', artist: '雅思词汇 · 阅读写作分册' },
         { showSeekForward: true, showSeekBackward: true },
       );
     } catch {

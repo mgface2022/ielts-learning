@@ -32,7 +32,7 @@ expo run:android 需要电脑上已经连着一台安卓手机（或模拟器）
    看到 device 而不是 unauthorized 之后，再运行 npm run android
 
 如果只是想装到手机上用，不必走这条命令。直接安装：
-  /Users/billy/Downloads/60s.apk
+  项目根目录下的 雅思词汇-*.apk
 或重新出包：
   npm run apk
 EOF

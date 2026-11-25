@@ -24,7 +24,7 @@ cd "$ANDROID_DIR"
 ./gradlew assembleRelease --no-daemon -PreactNativeArchitectures=arm64-v8a
 
 APK_SRC="$ANDROID_DIR/app/build/outputs/apk/release/app-release.apk"
-APK_DST="$ROOT/60s-$(date +%Y%m%d%H%M%S).apk"
+APK_DST="$ROOT/雅思词汇-$(date +%Y%m%d%H%M%S).apk"
 if [ ! -f "$APK_SRC" ]; then
   echo "APK not found: $APK_SRC"
   exit 1

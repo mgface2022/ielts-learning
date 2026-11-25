@@ -1,6 +1,8 @@
-# 60s — 英语听读学习 App
+# 雅思词汇 — 英语听读学习 App
 
-一个用 React Native 编写的英语学习 App：65 篇约一分钟的短文，每篇带美式女声朗读、逐句跟读高亮、词汇/词块发音、收藏复习等功能。目前主要面向 Android 打包发布。
+App 名称「雅思词汇」，Android 包名 `app.ieltsvocab`（项目目录名仍是 `60seconds`）。
+
+一个用 React Native 编写的英语学习 App：内容为《雅思词汇：阅读写作分册》，按小节拆成 117 课，每课带英中朗读、逐条跟读高亮、单词/词组/句型发音、收藏复习等功能。目前主要面向 Android 打包发布。
 
 本文档面向**懂 JavaScript / TypeScript、但没有移动端开发经验**的读者，从技术层面讲清楚这个项目是怎么搭起来的。
 
@@ -64,17 +66,18 @@ React Native（下面简称 RN）让你用 React 的写法（组件、JSX、hook
 │       └── ReviewScreen.tsx     # 复习页：收藏的单词词块列表、筛选、跳回原文
 │
 ├── assets/                  # 静态资源（打包进 App）
-│   ├── articles.json        # 全部 65 篇文章数据：正文、译文、词汇、词块、逐句时间轴
-│   ├── audio/               # 约 39MB 音频，65 个子目录，每篇一个
-│   │   └── 01-The-Lost-Key/
-│   │       ├── 01-The-Lost-Key.mp3   # 正文朗读
-│   │       ├── vocab-01-*.mp3        # 每个词汇的发音
-│   │       └── chunk-01-*.mp3        # 每个词块的发音
+│   ├── articles.json        # 全部 117 课数据：正文、译文、词汇、词块、逐条时间轴（由 gen-ielts.py 生成）
+│   ├── audio/               # 约 84MB 音频，117 个子目录，每课一个
+│   │   └── 001/
+│   │       ├── 001.mp3               # 正文朗读（英文 + 中文释义）
+│   │       ├── vocab-01-*.mp3        # 每个单词的发音
+│   │       └── chunk-01-*.mp3        # 每个词组/句型的发音
 │   ├── icon.png / android-icon-*.png / splash-icon.png   # App 图标和启动图
 │   └── favicon.png
 │
 ├── scripts/                 # 构建和数据生成脚本
-│   ├── gen-body-timings.py  # 用 edge-tts 生成正文音频 + 逐词时间戳 → 聚合成句子时间轴
+│   ├── gen-ielts.py         # 雅思词汇 Markdown → articles.json + 全部 edge-tts 音频（当前内容）
+│   ├── gen-body-timings.py  # 旧版短文用：edge-tts 生成正文音频 + 逐词时间戳 → 聚合成句子时间轴
 │   ├── sync-android-audio.js# prebuild 后把 assets/audio 复制进安卓工程的 assets 目录
 │   ├── build-apk.sh         # 一键打 Android 安装包（APK）
 │   └── run-android.sh       # 连真机/模拟器调试运行
@@ -87,11 +90,13 @@ React Native（下面简称 RN）让你用 React 的写法（组件、JSX、hook
 
 ### 数据从哪来
 
-文章内容源自 `60pieces` 的 Markdown 文件。音频和时间轴由 `scripts/gen-body-timings.py` 生成：它调用微软 Edge TTS（`edge-tts` Python 库，美式女声 `en-US-JennyNeural`）合成语音，同时接收 TTS 返回的 **WordBoundary 事件**（每个单词在音频里的精确毫秒位置），再把逐词时间聚合成逐句的 `{text, start, end}` 写进 `articles.json`。这就是"听读页音频播到哪句、哪句就高亮"的数据基础——App 运行时只是拿播放进度和句子时间轴做对比，不需要任何在线服务。
+当前内容源自项目根目录的 `雅思词汇-阅读写作分册.md`，由 `scripts/gen-ielts.py` 一次性转换：每个最小小节（`####`，或没有子节的 `###`）为一课，超过 40 条的小节均分成几课；单词进"词汇"、词组/搭配和句型进"词块"，正文每行一条，"译文"页是逐行对照的中文。音频同样用 edge-tts 生成：每条英文（`en-US-JennyNeural`）单独合成一个 mp3 作为词条发音；正文音频把各条按"英文 → 停顿 → 中文释义（`zh-CN-XiaoxiaoNeural`）→ 停顿"直接拼接（句型课只读英文），因为 edge-tts 输出是固定 48kbps 的 mp3，按字节数就能精确算出每条的起止毫秒，写进 `sentences`。TTS 结果缓存在 `.tts-cache/`，改了 Markdown 后重跑只会请求变动的条目。
+
+以下是旧版 65 篇短文的生成方式，供参考。文章内容源自 `60pieces` 的 Markdown 文件。音频和时间轴由 `scripts/gen-body-timings.py` 生成：它调用微软 Edge TTS（`edge-tts` Python 库，美式女声 `en-US-JennyNeural`）合成语音，同时接收 TTS 返回的 **WordBoundary 事件**（每个单词在音频里的精确毫秒位置），再把逐词时间聚合成逐句的 `{text, start, end}` 写进 `articles.json`。这就是"听读页音频播到哪句、哪句就高亮"的数据基础——App 运行时只是拿播放进度和句子时间轴做对比，不需要任何在线服务。
 
 ### 桌面小组件（Android 原生）
 
-`android/app/src/main/java/app/sixtyseconds/widget/` 下是纯 Kotlin 实现的两个桌面小组件（4×1 带上一篇/下一篇，2×1 只有播放键）和一个后台播放服务 `PlaybackService`。它**不依赖 JS 运行时**：用 Android 自带的 `MediaPlayer` 直接读 APK 里的音频，所以 App 没打开也能播；通过系统音频焦点和 App 内的 `expo-audio` 互斥，不会两边同时出声。小组件会跟随 App 内最后打开的那篇（直接读 AsyncStorage 的 SQLite 文件取 `sixty.lastId`）。原生侧需要文章目录，所以 `scripts/sync-android-audio.js` 现在也会把 `articles.json` 复制进 Android assets。
+`android/app/src/main/java/app/ieltsvocab/widget/` 下是纯 Kotlin 实现的两个桌面小组件（4×1 带上一篇/下一篇，2×1 只有播放键）和一个后台播放服务 `PlaybackService`。它**不依赖 JS 运行时**：用 Android 自带的 `MediaPlayer` 直接读 APK 里的音频，所以 App 没打开也能播；通过系统音频焦点和 App 内的 `expo-audio` 互斥，不会两边同时出声。小组件会跟随 App 内最后打开的那篇（直接读 AsyncStorage 的 SQLite 文件取 `sixty.lastId`）。原生侧需要文章目录，所以 `scripts/sync-android-audio.js` 现在也会把 `articles.json` 复制进 Android assets。
 
 注意：这些原生文件在 `expo prebuild --clean` 时会被清掉，`android/` 目录已提交进 git，不要随意重新 prebuild。
 
@@ -131,7 +136,7 @@ npm run apk               # ② 编译出 APK
 
 1. 设置 `JAVA_HOME`、`ANDROID_HOME` 环境变量，把 SDK 路径写进 `android/local.properties`；
 2. 执行 `./gradlew assembleRelease`——Gradle 会：用 Metro（RN 的打包器，相当于 webpack）把所有 TS 编译打包成一个 JS bundle → 编译原生代码 → 把 JS bundle、音频、图标、原生库全部装进一个 APK → 用密钥签名（安卓要求所有 APK 必须签名才能安装）；
-3. 把产物复制到项目根目录，命名成 `60s-年月日时分秒.apk`。
+3. 把产物复制到项目根目录，命名成 `雅思词汇-年月日时分秒.apk`。
 
 把这个 APK 传到手机上点击安装即可。只编译了 `arm64-v8a` 一种 CPU 架构（近几年的手机全是这个），所以包体更小。
 
@@ -167,7 +172,7 @@ npx expo prebuild -p ios --clean
 cd ios && pod install && cd ..
 
 # ③ 用 Xcode 打开工程
-open ios/sixtyseconds.xcworkspace
+open ios/*.xcworkspace
 ```
 
 然后在 Xcode 里：**Signing & Capabilities** 页签选择你的 Apple ID 作为签名团队 → 顶部选择目标设备 → 菜单 **Product → Archive** 归档 → 导出 IPA 或直接安装到连接的 iPhone。
@@ -210,7 +215,8 @@ git push origin v0.0.1   # 推送 tag 即触发构建
 | `npm run prebuild:android` | 重新生成安卓原生工程 + 同步音频资源 |
 | `npm run apk` | 打正式 APK，输出到项目根目录（带时间戳文件名） |
 | `npx tsc --noEmit` | 只做 TypeScript 类型检查，不产出文件 |
-| `/tmp/tts-venv/bin/python scripts/gen-body-timings.py` | 重新生成正文音频和逐句时间轴 |
+| `/tmp/tts-venv/bin/python scripts/gen-ielts.py` | 从雅思词汇 Markdown 重新生成全部课程数据和音频（`--dry-run` 只看分课结果） |
+| `node scripts/sync-android-audio.js` | 把 `assets/` 的音频和 `articles.json` 同步进安卓工程（换内容后打包前必跑） |
 
 ---
 

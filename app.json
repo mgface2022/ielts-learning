@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "60s",
+    "name": "雅思词汇",
     "slug": "sixty seconds",
     "version": "1.1.3",
     "orientation": "default",
@@ -13,10 +13,10 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "app.sixtyseconds"
+      "bundleIdentifier": "app.ieltsvocab"
     },
     "android": {
-      "package": "app.sixtyseconds",
+      "package": "app.ieltsvocab",
       "blockedPermissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.SYSTEM_ALERT_WINDOW"

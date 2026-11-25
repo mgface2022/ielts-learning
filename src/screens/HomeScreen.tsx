@@ -34,8 +34,8 @@ export function HomeScreen({ learned, lastId, favoriteCount, onOpen, onOpenRevie
   return (
     <View style={styles.root}>
       <View style={styles.header}>
-        <Text style={styles.brand}>60s</Text>
-        <Text style={styles.tagline}>一篇大约一分钟。听完、跟读、再看词。</Text>
+        <Text style={styles.brand}>雅思词汇</Text>
+        <Text style={styles.tagline}>阅读写作分册。听完、跟读、再看词。</Text>
         <View style={styles.strip}>
           <View style={styles.stripTrack}>
             <View
@@ -123,9 +123,9 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: space.lg, paddingBottom: space.sm },
   brand: {
     color: colors.ink,
-    fontSize: 42,
+    fontSize: 36,
     fontWeight: '800',
-    letterSpacing: -1.4,
+    letterSpacing: 0,
   },
   tagline: {
     marginTop: 4,

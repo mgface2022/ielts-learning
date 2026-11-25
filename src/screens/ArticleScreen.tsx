@@ -162,6 +162,8 @@ export function ArticleScreen({
     return list;
   }, [wide, rightTab, article, highlight]);
 
+  // 词表类课文的正文按行排列（每行一个词条），普通短文按空格连成段落
+  const sentenceGap = article.body.includes('\n') ? '\n' : ' ';
   const bodyNode =
     article.sentences && article.sentences.length > 0 ? (
       <Text style={styles.body}>
@@ -181,7 +183,7 @@ export function ArticleScreen({
               }}
             >
               {markTerms(sentence.text, bodyMarks, `s${index}`)}
-              {index < article.sentences!.length - 1 ? ' ' : ''}
+              {index < article.sentences!.length - 1 ? sentenceGap : ''}
             </Text>
           );
         })}
@@ -248,7 +250,7 @@ export function ArticleScreen({
           <Text style={styles.playerMeta}>
             {isBody && playback.duration > 0
               ? `${playback.loopTarget > 1 ? `第 ${playback.loopIndex} / ${playback.loopTarget} 遍 · ` : ''}${formatMillis(playback.position)} / ${formatMillis(playback.duration)}`
-              : '大约一分钟 · 美式女声'}
+              : `${article.sentences?.length ?? 0} 条 · 美式女声`}
           </Text>
           <View style={styles.loopRow}>
             <Text style={styles.loopLabel}>循环</Text>
