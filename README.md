@@ -1,6 +1,6 @@
 # 雅思词汇 — 英语听读学习 App
 
-App 名称「雅思词汇」，Android 包名 `app.ieltsvocab`（项目目录名仍是 `60seconds`）。
+App 名称「雅思词汇」，Android 包名 `app.ieltsvocab`，项目目录 `ieltsLearning`。
 
 一个用 React Native 编写的英语学习 App：内容为《雅思词汇：阅读写作分册》，按小节拆成 117 课，每课带英中朗读、逐条跟读高亮、单词/词组/句型发音、收藏复习等功能。目前主要面向 Android 打包发布。
 
@@ -43,7 +43,7 @@ React Native（下面简称 RN）让你用 React 的写法（组件、JSX、hook
 ## 2. 项目结构
 
 ```
-60seconds/
+ieltsLearning/
 ├── index.ts                 # 入口：把 App 组件注册给 RN 运行时
 ├── App.tsx                  # 根组件：路由切换、全局状态（已学/收藏）、安卓返回键处理
 ├── app.json                 # Expo 配置：App 名、图标、版本、Android 包名、权限、插件
@@ -216,6 +216,7 @@ git push origin v0.0.1   # 推送 tag 即触发构建
 | `npm run apk` | 打正式 APK，输出到项目根目录（带时间戳文件名） |
 | `npx tsc --noEmit` | 只做 TypeScript 类型检查，不产出文件 |
 | `/tmp/tts-venv/bin/python scripts/gen-ielts.py` | 从雅思词汇 Markdown 重新生成全部课程数据和音频（`--dry-run` 只看分课结果） |
+| `/tmp/tts-venv/bin/python scripts/gen-icons.py` | 重新生成 App 图标、启动图和安卓各密度 launcher 资源（需 `pip install pillow`） |
 | `node scripts/sync-android-audio.js` | 把 `assets/` 的音频和 `articles.json` 同步进安卓工程（换内容后打包前必跑） |
 
 ---

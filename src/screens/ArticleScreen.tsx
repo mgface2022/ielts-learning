@@ -125,8 +125,19 @@ export function ArticleScreen({
   onToggleLearned,
   onToggleFavorite,
 }: Props) {
-  const [tab, setTab] = useState<(typeof TABS)[number]>('听读');
-  const [rightTab, setRightTab] = useState<(typeof RIGHT_TABS)[number]>('译文');
+  const [selectedTab, setTab] = useState<(typeof TABS)[number]>('听读');
+  const [selectedRightTab, setRightTab] = useState<(typeof RIGHT_TABS)[number]>('译文');
+  // 没有内容的 tab 不显示；切换课文后原选中的 tab 不存在时回落到第一个
+  const hasContent: Record<(typeof TABS)[number], boolean> = {
+    听读: true,
+    词汇: article.vocab.length > 0,
+    词块: article.chunks.length > 0,
+    译文: article.translation.trim().length > 0,
+  };
+  const tabs = TABS.filter((item) => hasContent[item]);
+  const rightTabs = RIGHT_TABS.filter((item) => hasContent[item]);
+  const tab = tabs.includes(selectedTab) ? selectedTab : tabs[0];
+  const rightTab = rightTabs.includes(selectedRightTab) ? selectedRightTab : rightTabs[0];
   const playback = usePlayer();
   const bodyId = `body:${article.id}`;
   const isBody = playback.currentId === bodyId;
@@ -162,35 +173,61 @@ export function ArticleScreen({
     return list;
   }, [wide, rightTab, article, highlight]);
 
-  // 词表类课文的正文按行排列（每行一个词条），普通短文按空格连成段落
-  const sentenceGap = article.body.includes('\n') ? '\n' : ' ';
-  const bodyNode =
-    article.sentences && article.sentences.length > 0 ? (
+  const sentences = article.sentences ?? [];
+  const activeIndex = isBody
+    ? sentences.findIndex((sentence, index) => {
+        const next = sentences[index + 1];
+        return (
+          playback.position >= sentence.start &&
+          (next ? playback.position < next.start : playback.position <= sentence.end + 500)
+        );
+      })
+    : -1;
+  const playSentence = (index: number) => {
+    void player.playFrom(bodyId, article.bodyAudio, sentences[index].start, article.title);
+  };
+
+  // 词表类课文（正文每行一个词条）逐行加分隔线，普通短文连成段落
+  const listBody = article.body.includes('\n');
+  let bodyNode: ReactNode;
+  if (sentences.length === 0) {
+    bodyNode = <Text style={styles.body}>{markTerms(article.body, bodyMarks, 'b')}</Text>;
+  } else if (listBody) {
+    bodyNode = sentences.map((sentence, index) => (
+      <Pressable key={index} onPress={() => playSentence(index)} style={styles.line}>
+        <Text style={[styles.body, index === activeIndex && styles.sentenceOn]}>
+          {markTerms(sentence.text, bodyMarks, `s${index}`)}
+        </Text>
+      </Pressable>
+    ));
+  } else {
+    bodyNode = (
       <Text style={styles.body}>
-        {article.sentences.map((sentence, index) => {
-          const next = article.sentences![index + 1];
-          const active =
-            isBody &&
-            playback.position >= sentence.start &&
-            (next ? playback.position < next.start : playback.position <= sentence.end + 500);
-          return (
-            <Text
-              key={index}
-              suppressHighlighting
-              style={active ? styles.sentenceOn : undefined}
-              onPress={() => {
-                void player.playFrom(bodyId, article.bodyAudio, sentence.start, article.title);
-              }}
-            >
-              {markTerms(sentence.text, bodyMarks, `s${index}`)}
-              {index < article.sentences!.length - 1 ? sentenceGap : ''}
-            </Text>
-          );
-        })}
+        {sentences.map((sentence, index) => (
+          <Text
+            key={index}
+            suppressHighlighting
+            style={index === activeIndex ? styles.sentenceOn : undefined}
+            onPress={() => playSentence(index)}
+          >
+            {markTerms(sentence.text, bodyMarks, `s${index}`)}
+            {index < sentences.length - 1 ? ' ' : ''}
+          </Text>
+        ))}
       </Text>
-    ) : (
-      <Text style={styles.body}>{markTerms(article.body, bodyMarks, 'b')}</Text>
     );
+  }
+
+  // 译文与正文逐行对应时同样逐行分隔；【】包住的是原书的句型/搭配说明，用次级文字样式
+  const translationNode = article.translation.includes('\n') ? (
+    article.translation.split('\n').map((line, index) => (
+      <View key={index} style={styles.line}>
+        <Text style={line.startsWith('【') ? styles.entryZh : styles.translation}>{line}</Text>
+      </View>
+    ))
+  ) : (
+    <Text style={styles.translation}>{article.translation}</Text>
+  );
 
   const vocabRows = article.vocab.map((item, index) => {
     const id = `vocab:${article.id}:${index}`;
@@ -310,7 +347,7 @@ export function ArticleScreen({
 
           <View style={[styles.rightPane, { width: rightWidth }]}>
             <View style={styles.tabs}>
-              {RIGHT_TABS.map((item) => {
+              {rightTabs.map((item) => {
                 const active = item === rightTab;
                 return (
                   <Pressable
@@ -324,9 +361,7 @@ export function ArticleScreen({
               })}
             </View>
             <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-              {rightTab === '译文' ? (
-                <Text style={styles.translation}>{article.translation}</Text>
-              ) : null}
+              {rightTab === '译文' ? translationNode : null}
               {rightTab === '词汇' ? vocabRows : null}
               {rightTab === '词块' ? chunkRows : null}
             </ScrollView>
@@ -336,7 +371,7 @@ export function ArticleScreen({
         <View style={styles.content}>
           {headerNode}
           <View style={styles.tabs}>
-            {TABS.map((item) => {
+            {tabs.map((item) => {
               const active = item === tab;
               return (
                 <Pressable
@@ -353,7 +388,7 @@ export function ArticleScreen({
             {tab === '听读' ? bodyNode : null}
             {tab === '词汇' ? vocabRows : null}
             {tab === '词块' ? chunkRows : null}
-            {tab === '译文' ? <Text style={styles.translation}>{article.translation}</Text> : null}
+            {tab === '译文' ? translationNode : null}
           </ScrollView>
         </View>
       )}
@@ -517,6 +552,12 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontSize: 17,
     lineHeight: 30,
+  },
+  // 逐行列表的分隔样式，与词汇/词块的 entry 行一致
+  line: {
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.line,
   },
   entry: {
     flexDirection: 'row',

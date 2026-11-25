@@ -104,8 +104,13 @@ export function HomeScreen({ learned, lastId, favoriteCount, onOpen, onOpenRevie
                   {item.title}
                 </Text>
                 <Text style={styles.meta} numberOfLines={1}>
-                  {item.vocab.length} 词 · {item.chunks.length} 词块
-                  {done ? ' · 已学' : ''}
+                  {[
+                    item.vocab.length > 0 ? `${item.vocab.length} 词` : null,
+                    item.chunks.length > 0 ? `${item.chunks.length} 词块` : null,
+                    done ? '已学' : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </Text>
               </View>
               <View style={[styles.dot, done && styles.dotOn]} />
